@@ -1,0 +1,5 @@
+customtkinter>=5.2.2
+psutil>=6.0.0
+send2trash>=1.8.3
+pywin32>=306; sys_platform == "win32"
+Pillow>=10.0.0
