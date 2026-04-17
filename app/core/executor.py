@@ -10,12 +10,14 @@ import os
 import shutil
 import stat
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
 
 from ..categories.base import CleanItem
 from .logger import get_logger
+from .pathwin import extended_length_str, format_os_error
 from .safety import UnsafePathError, assert_safe_to_delete
 from .settings import Settings
 from .sizing import invalidate_size_cache
@@ -57,8 +59,12 @@ def _on_rm_error(func, path, exc_info):
 
 
 def _send_to_trash(path: Path) -> None:
-    from send2trash import send2trash
-
+    try:
+        from send2trash import send2trash
+    except ImportError as exc:
+        raise RuntimeError(
+            "send2trash is not installed. Run: pip install send2trash"
+        ) from exc
     send2trash(str(path))
 
 
@@ -180,40 +186,165 @@ class Executor:
                 continue
 
             try:
-                freed_here, deleted_here = self._delete_one(safe_path)
+                freed_here, deleted_here = self._delete_one(
+                    safe_path,
+                    contents_only=item.contents_only,
+                    direct_delete=item.direct_delete,
+                )
                 result.freed_bytes += freed_here
                 result.deleted_files += deleted_here
                 invalidate_size_cache(safe_path)
             except Exception as exc:
-                msg = f"failed to delete {safe_path}: {exc}"
+                msg = f"failed to delete {safe_path}: {format_os_error(exc) if isinstance(exc, OSError) else exc}"
                 result.errors.append(msg)
                 _log.error(msg)
 
         return result
 
-    def _delete_one(self, path: Path) -> tuple[int, int]:
-        """Delete path. Returns (freed_bytes, files_removed)."""
-        freed = 0
-        files = 0
+    def _unlink_forced(self, path: Path) -> None:
+        """Remove a file or symlink; chmod retry on Windows."""
         try:
-            if path.is_file() or path.is_symlink():
+            path.unlink(missing_ok=True)
+        except PermissionError:
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                path.unlink(missing_ok=True)
+            except OSError:
+                if os.name == "nt":
+                    os.unlink(extended_length_str(path))
+                else:
+                    raise
+
+    def _rmtree_forced(self, path: Path) -> None:
+        """Remove a directory tree; prefer extended-length paths on Windows."""
+        target = extended_length_str(path) if os.name == "nt" else str(path)
+        shutil.rmtree(target, onerror=_on_rm_error)
+
+    def _delete_contents_children(
+        self,
+        children: List[Path],
+        *,
+        direct_delete: bool,
+    ) -> tuple[int, int]:
+        """Delete top-level entries under a contents_only folder (optionally parallel)."""
+        if not children:
+            return 0, 0
+
+        use_parallel = direct_delete and len(children) > 3
+        if not use_parallel:
+            total_freed = 0
+            total_files = 0
+            for child in children:
+                if self._stop.is_set():
+                    break
+                try:
+                    f, n = self._delete_one(
+                        child, contents_only=False, direct_delete=direct_delete
+                    )
+                    total_freed += f
+                    total_files += n
+                except Exception as exc:
+                    _log.warning("skip %s: %s", child, exc)
+            return total_freed, total_files
+
+        workers = min(32, max(4, (os.cpu_count() or 4) * 2), len(children))
+        total_freed = 0
+        total_files = 0
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            future_map = {
+                pool.submit(
+                    self._delete_one,
+                    child,
+                    contents_only=False,
+                    direct_delete=direct_delete,
+                ): child
+                for child in children
+            }
+            for fut in as_completed(future_map):
+                if self._stop.is_set():
+                    break
+                child = future_map[fut]
+                try:
+                    f, n = fut.result()
+                    total_freed += f
+                    total_files += n
+                except Exception as exc:
+                    _log.warning("skip %s: %s", child, exc)
+        return total_freed, total_files
+
+    def _delete_one(
+        self,
+        path: Path,
+        *,
+        contents_only: bool = False,
+        direct_delete: bool = False,
+    ) -> tuple[int, int]:
+        """Delete path. Returns (freed_bytes, files_removed).
+
+        *contents_only*: delete everything inside *path* but keep *path* itself.
+        Used for %TEMP% and similar — Windows Shell refuses to recycle the root folder (OLE 0x80270028).
+
+        *direct_delete*: skip send2trash entirely (no Shell / OLE per file). Much faster for
+        Temp and $Recycle.Bin; not recoverable from Explorer's Recycle Bin.
+
+        Symlinks (file or directory) remove only the link, never the target tree.
+        """
+        try:
+            path = path.resolve()
+        except OSError:
+            path = path
+
+        use_trash = self.settings.use_recycle_bin and not direct_delete
+
+        try:
+            if contents_only and path.is_dir() and not path.is_symlink():
+                try:
+                    children = list(path.iterdir())
+                except OSError as exc:
+                    _log.warning("cannot list %s: %s", path, exc)
+                    return 0, 0
+                return self._delete_contents_children(
+                    children, direct_delete=direct_delete
+                )
+
+            # Symlink (to file or dir): never follow into target
+            if path.is_symlink():
+                freed = 0
                 try:
                     freed = path.stat().st_size
                 except OSError:
                     pass
                 files = 1
-                if self.settings.use_recycle_bin:
-                    _send_to_trash(path)
-                else:
+                if use_trash:
                     try:
-                        path.unlink()
-                    except PermissionError:
-                        os.chmod(path, stat.S_IWRITE)
-                        path.unlink()
+                        _send_to_trash(path)
+                    except Exception as exc:
+                        _log.warning("send2trash failed for symlink %s: %s", path, exc)
+                        self._unlink_forced(path)
+                else:
+                    self._unlink_forced(path)
                 return freed, files
 
-            # Directory: size up first so we can report freed bytes.
-            for root, _dirs, filenames in os.walk(path):
+            freed = 0
+            files = 0
+            if path.is_file():
+                try:
+                    freed = path.stat().st_size
+                except OSError:
+                    pass
+                files = 1
+                if use_trash:
+                    try:
+                        _send_to_trash(path)
+                    except Exception as exc:
+                        _log.warning("send2trash failed for file %s: %s", path, exc)
+                        self._unlink_forced(path)
+                else:
+                    self._unlink_forced(path)
+                return freed, files
+
+            # Real directory (not a symlink)
+            for root, _dirs, filenames in os.walk(path, topdown=False, followlinks=False):
                 for fname in filenames:
                     fpath = os.path.join(root, fname)
                     try:
@@ -222,10 +353,18 @@ class Executor:
                     except OSError:
                         pass
 
-            if self.settings.use_recycle_bin:
-                _send_to_trash(path)
+            if use_trash:
+                try:
+                    _send_to_trash(path)
+                except Exception as exc:
+                    _log.warning(
+                        "send2trash failed for dir %s (%s); falling back to direct delete",
+                        path,
+                        exc,
+                    )
+                    self._rmtree_forced(path)
             else:
-                shutil.rmtree(path, onerror=_on_rm_error)
+                self._rmtree_forced(path)
             return freed, files
         except FileNotFoundError:
             return 0, 0

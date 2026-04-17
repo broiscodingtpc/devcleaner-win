@@ -153,7 +153,12 @@ class DetailPanel(ctk.CTkFrame):
             if item.recreated_automatically
             else "Will not come back unless you recreate it. "
         )
-        self._affects.configure(text=recreated + item.affects)
+        fast = (
+            "Fast delete (no Explorer Recycle Bin / Shell per file). "
+            if item.direct_delete
+            else ""
+        )
+        self._affects.configure(text=recreated + fast + item.affects)
 
         self._paths_box.configure(state="normal")
         self._paths_box.delete("0.0", "end")

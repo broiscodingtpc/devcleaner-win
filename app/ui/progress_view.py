@@ -88,8 +88,10 @@ class ProgressDialog(ctk.CTkToplevel):
         self._log.configure(state="disabled")
 
     def update_progress(self, progress: CleanupProgress) -> None:
-        if progress.total_items:
-            self._progress.set(progress.done_items / progress.total_items)
+        if progress.total_items and progress.total_items > 0:
+            self._progress.set(
+                min(1.0, progress.done_items / progress.total_items)
+            )
         status = (
             f"{progress.done_items}/{progress.total_items} items - freed "
             f"{human_bytes(progress.freed_bytes)} of ~{human_bytes(progress.total_bytes)}"

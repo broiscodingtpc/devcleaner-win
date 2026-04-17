@@ -20,21 +20,19 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/main-ui.png" alt="DevCleaner — main window with scan list and detail panel" width="920"/><br/>
-  <sub>Categories, risk badges, search, Quick Clean, and “what will this affect?”</sub>
+  <img src="assets/afterscan.PNG" alt="DevCleaner — after scan" width="800"/><br/>
+  <sub>Main window with scan results and risk badges</sub>
 </p>
 <br/>
 <p align="center">
-  <img src="docs/screenshots/detail-panel.png" alt="Detail panel — impact explanation" width="440"/>
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/localhost-tab.png" alt="Localhost servers tab" width="440"/>
+  <img src="assets/cleaning.PNG" alt="Cleaning process" width="800"/><br/>
+  <sub>Cleaning interface in action</sub>
 </p>
 <br/>
 <p align="center">
-  <img src="docs/screenshots/settings.png" alt="Settings — dry run and extra scan roots" width="720"/>
+  <img src="assets/aidev.PNG" alt="AI and Dev Categories" width="800"/><br/>
+  <sub>Specific categories like AI and Dev Stacks</sub>
 </p>
-
-<p align="center"><sub>Images live in <code>docs/screenshots/</code> — add PNGs named as above, or see <a href="docs/screenshots/README.md">docs/screenshots/README.md</a>.</sub></p>
 
 ---
 

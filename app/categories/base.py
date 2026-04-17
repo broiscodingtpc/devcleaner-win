@@ -35,6 +35,12 @@ class CleanItem:
         needs_extra_allowed: Extra path prefixes to grant to the safety guard
             for this item (used when we intentionally touch sub-paths of a
             denied root, e.g. __pycache__ under user Documents).
+        contents_only: When True and path is a directory, delete everything
+            *inside* it but keep the directory itself. Required for well-known
+            folders like %TEMP% where Shell refuses to recycle the root (OLE 0x80270028).
+        direct_delete: When True, never call send2trash (Shell) — use direct unlink /
+            rmtree only. Much faster for high-churn folders (Temp, $Recycle.Bin);
+            not undoable via Explorer Recycle Bin.
         size_bytes: Populated by the scanner.
         file_count: Populated by the scanner.
         error: Populated by the scanner when sizing or existence check fails.
@@ -51,6 +57,8 @@ class CleanItem:
     requires_admin: bool = False
     command: Optional[Callable[[], None]] = None
     needs_extra_allowed: List[Path] = field(default_factory=list)
+    contents_only: bool = False
+    direct_delete: bool = False
 
     size_bytes: int = 0
     file_count: int = 0

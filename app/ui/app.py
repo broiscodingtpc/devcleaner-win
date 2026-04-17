@@ -525,6 +525,10 @@ class CleanerApp(ctk.CTk):
             if not answer:
                 return
 
+        self._clean_btn.configure(state="disabled")
+        self._quick_btn.configure(state="disabled")
+        self._scan_btn.configure(state="disabled")
+
         executor = Executor(self.settings)
         dialog = ProgressDialog(self, title="Cleaning")
 
@@ -533,6 +537,11 @@ class CleanerApp(ctk.CTk):
 
         def on_result(r: CleanupResult) -> None:
             self.after(0, dialog.append_result, r)
+
+        def restore_action_buttons() -> None:
+            self._clean_btn.configure(state="normal")
+            self._quick_btn.configure(state="normal")
+            self._scan_btn.configure(state="normal")
 
         def task() -> None:
             try:
@@ -544,6 +553,8 @@ class CleanerApp(ctk.CTk):
             except Exception as exc:
                 _log.exception("cleanup failed")
                 self.after(0, dialog.fail, str(exc))
+            finally:
+                self.after(0, restore_action_buttons)
 
         dialog.on_cancel = executor.abort
         t = threading.Thread(target=task, daemon=True, name="executor")

@@ -39,11 +39,14 @@ class WindowsSystemCategory(Category):
                     paths=[user_temp],
                     risk=Risk.SAFE,
                     affects=(
-                        "Installer leftovers, extracted archives, editor autosaves older "
-                        "than the current session. Recreated on demand."
+                        "Empties files and subfolders inside your %TEMP% path; the Temp "
+                        "folder itself is kept. Uses direct delete (no Shell Recycle Bin) so "
+                        "it runs fast; locked files are skipped. Not undoable from Explorer."
                     ),
-                    reversible=True,
+                    reversible=False,
                     requires_admin=False,
+                    contents_only=True,
+                    direct_delete=True,
                 )
             )
 
@@ -55,9 +58,14 @@ class WindowsSystemCategory(Category):
                     name="System temp folder (C:\\Windows\\Temp)",
                     paths=[win_temp],
                     risk=Risk.SAFE,
-                    affects="System-wide scratch space. Safe to empty when idle.",
-                    reversible=True,
+                    affects=(
+                        "Empties Windows\\Temp contents; folder kept. Direct delete for speed; "
+                        "locked files skipped. Run as Administrator. Not undoable from Explorer."
+                    ),
+                    reversible=False,
                     requires_admin=True,
+                    contents_only=True,
+                    direct_delete=True,
                 )
             )
 
@@ -209,12 +217,14 @@ class WindowsSystemCategory(Category):
                 paths=[recycle],
                 risk=Risk.MEDIUM,
                 affects=(
-                    "All files currently in the Recycle Bin will be permanently erased. "
-                    "Review before confirming."
+                    "Deletes contents inside $Recycle.Bin (per-user SID folders); the root "
+                    "folder stays. Direct delete for speed (same end result as emptying bin)."
                 ),
                 reversible=False,
                 requires_admin=True,
                 default_selected=False,
+                contents_only=True,
+                direct_delete=True,
             )
         )
 
