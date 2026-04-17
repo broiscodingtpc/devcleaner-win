@@ -11,9 +11,30 @@
 
 **A friendly, opinionated desktop cleaner for developers who ship code, run AI, and somehow still have three copies of `node_modules` from 2019.**
 
-[Features](#-features) · [Quick start](#-quick-start) · [Safety](#-safety) · [Building](#-building-exe) · [Contributing](#-contributing)
+[Features](#features) · [Screenshots](#screenshots) · [Quick start](#quick-start) · [Safety](#safety) · [Build exe](#build-exe) · [Contributing](#contributing)
 
 </div>
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/main-ui.png" alt="DevCleaner — main window with scan list and detail panel" width="920"/><br/>
+  <sub>Categories, risk badges, search, Quick Clean, and “what will this affect?”</sub>
+</p>
+<br/>
+<p align="center">
+  <img src="docs/screenshots/detail-panel.png" alt="Detail panel — impact explanation" width="440"/>
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/localhost-tab.png" alt="Localhost servers tab" width="440"/>
+</p>
+<br/>
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="Settings — dry run and extra scan roots" width="720"/>
+</p>
+
+<p align="center"><sub>Images live in <code>docs/screenshots/</code> — add PNGs named as above, or see <a href="docs/screenshots/README.md">docs/screenshots/README.md</a>.</sub></p>
 
 ---
 
